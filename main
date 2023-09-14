@@ -1,0 +1,365 @@
+import serial
+from time import sleep
+import sys
+import tkinter as tk
+import cv2
+from tkinter import ttk, filedialog
+from PIL import ImageTk, Image
+import threading
+import socket
+import os
+import numpy as np
+import requests
+
+
+#有線連接
+COM_PORT = 'COM4'  # 請自行修改序列埠名稱
+BAUD_RATES = 9600
+#ser = serial.Serial(COM_PORT, BAUD_RATES)
+
+#連接WIFI的ARDUINO ESP32S
+#s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#s.connect(('192.168.0.17',8080))  # 使用你的 ESP32 IP 地址和 port 號碼
+
+def perform_request(command):
+    try:
+        #response = requests.get(f'http://192.168.0.17:80/command?cmd={command}')
+        response = requests.get(f'http://192.168.0.26:80/command?cmd={command}')
+        if response.status_code == 200:
+            print(f'Command {command} sent successfully!')
+    except:
+        print('link fail')
+
+
+
+image_folder = "PIC"
+if not os.path.exists(image_folder):
+    os.makedirs(image_folder)
+counter = 0
+#_, frame = None, None
+
+
+Video_path = "123456.jpg"
+url = 'rtsp://192.168.0.200:554/profile1'
+
+
+
+#cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(Video_path)
+#cap = cv2.VideoCapture(url)
+
+
+def get_frame():
+    """ 從視頻源抓取一幀並返回 """
+    ret, frame = cap.read()
+    return frame
+
+def update_image_label(label):
+    """ 更新視訊源當前幀 """
+    frame = get_frame()
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    #img2 = cv2.resize(frame, (400, 400), interpolation=cv2.INTER_AREA )
+    #圖像處理
+
+    img_cv = cv2.resize(frame, (0, 0), fx=0.3, fy=0.3)
+    hsv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV)
+    # 濾除非綠色部分
+
+    #lower_green = np.array([35, 43, 46])#綠色
+    #upper_green = np.array([77, 255, 255])#綠色
+    #lower_brown = np.array([0, 80, 40]) #棕色
+    #upper_brown = np.array([50, 130, 130]) #棕色
+    lower_brown = np.array([0, 60, 40]) #棕色
+    upper_brown = np.array([130, 250, 130]) #棕色
+    mask = cv2.inRange(hsv, lower_brown, upper_brown)
+    # 轉為二值化
+    _, binary = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
+
+    contours_line, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(img_cv, contours_line , -1, (0,0,255), 3)
+
+    for contour in contours_line:
+        area = cv2.contourArea(contour)
+        if area > 300:  #你可以自行設定這個值，這裡我假設你只畫出面積大於500的矩形
+            x, y, w, h = cv2.boundingRect(contour)
+            #cv2.rectangle(img_cv, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    image = Image.fromarray(img_cv)
+    photo = ImageTk.PhotoImage(image)
+    label.config(image=photo)
+    label.image = photo
+    label.after(100, update_image_label, label)
+
+
+def show_frame_green():
+    """ 更新視訊源當前幀 """
+    ret, frame = cap.read()
+    #frame1 = get_frame()
+    frame1 = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    #img2 = cv2.resize(frame, (400, 400), interpolation=cv2.INTER_AREA )
+    #圖像處理
+
+    img_cv = cv2.resize(frame1, (0, 0), fx=0.3, fy=0.3)
+    hsv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV)
+    # 濾除非綠色部分
+
+    lower_green = np.array([35, 43, 46])#綠色
+    upper_green = np.array([77, 255, 255])#綠色
+    #lower_brown = np.array([0, 80, 40]) #棕色
+    #upper_brown = np.array([50, 130, 130]) #棕色
+    #lower_brown = np.array([0, 60, 40]) #棕色
+    #upper_brown = np.array([130, 250, 130]) #棕色
+    mask = cv2.inRange(hsv, lower_green, upper_green)
+    output2 = cv2.bitwise_and(img_cv, img_cv, mask=mask)
+    # 轉為二值化
+    _, binary = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY)
+
+    contours_line, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(img_cv, contours_line , -1, (255,0,0), 3)
+
+    #for contour in contours_line:
+        #area = cv2.contourArea(contour)
+        #if area > 300:  #你可以自行設定這個值，這裡我假設你只畫出面積大於500的矩形
+            #x, y, w, h = cv2.boundingRect(contour)
+            #cv2.rectangle(img_cv, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    #image = Image.fromarray(img_cv)
+    img = Image.fromarray(img_cv)
+    photo = ImageTk.PhotoImage(image=img)
+    image_label1.imgtk= photo
+    image_label1.config(image=photo)
+    image_label1.image = photo
+    image_label1.after(100, show_frame_green)
+
+
+"""
+    #gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+    #circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1.2, 100)
+    #if circles is not None:
+       # circles = np.uint16(np.around(circles))
+        #for i in circles[0, :]:
+            #center = (i[0], i[1])  # circle center
+            # circle outline
+            #radius = i[2]  # circle radius
+            #cv2.circle(img_cv, center, radius, (0, 255, 0), 2)
+"""
+
+
+
+
+
+def save_snapshot(name):
+    frame = get_frame()
+    global counter
+    counter += 1
+    file_name=str(name)
+    file_path =('C://Users//user//Desktop//newproject//' + file_name + '.jpg')
+    #file_path = ('C://Users//user//Desktop//newproject//431.jpg')
+    cv2.imwrite(file_path, frame)
+
+def save_image(capture):
+    global counter
+    frame = get_frame()
+    counter += 1
+    print(f'存檔第{counter}張')
+    cv2.imwrite(f"{image_folder}/PIC/第{counter}張圖.jpg", frame)
+
+
+#def sent_message():
+    #s.sendall(b'Hello, ESP32!\n')
+    #data = s.recv(1024)
+
+
+def walk_y_on():
+    print('傳送Y走路往正方向指令')
+    #ser.write(b'walk_y_on\n')
+    perform_request('walk_y_on\n')
+    #s.sendall(b'walk_y_on\n')
+    sleep(0.5)  # 暫停0.5秒，再執行底下接收回應訊息的迴圈
+
+
+def walk_y_off():
+    print('傳送Y走路往負方向指令')
+    #ser.write(b'walk_y_off\n')
+    perform_request('walk_y_off\n')
+    #s.sendall(b'walk_y_off\n')
+    sleep(0.5)  # 暫停0.5秒，再執行底下接收回應訊息的迴圈
+
+def walk_x_on():
+    print('傳送X走路往負方向指令')
+    #ser.write(b'walk_x_on\n')
+    perform_request('walk_x_on\n')
+    #s.sendall(b'walk_x_on\n')
+    sleep(0.5)  # 暫停0.5秒，再執行底下接收回應訊息的迴圈
+
+def walk_x_off():
+    print('傳送X走路往負方向指令')
+    #ser.write(b'walk_x_off\n')
+    perform_request('walk_x_off\n')
+    #s.sendall(b'walk_x_off\n')
+    sleep(0.5)  # 暫停0.5秒，再執行底下接收回應訊息的迴圈
+
+def walk_orgin():
+    print('走回原點指令')
+    #ser.write(b'walk_orgin\n')
+    perform_request('walk_orgin\n')
+    #s.sendall(b'walk_orgin\n')
+    label_x_value["text"] = "0"
+    label_y_value["text"] = "0"
+    sleep(0.5)  # 暫停0.5秒，再執行底下接收回應訊息的迴圈
+
+def auto_walk():
+
+    cap = cv2.VideoCapture(Video_path)
+    ret, frame = cap.read()
+    x_num = label_x_2.get()
+    x_num = int(x_num)
+    print("取得x" + str(x_num))
+    x_ratio = 1
+    y_num = label_y_2.get()
+    y_num = int(y_num)
+    print("取得y" + str(y_num))
+    frame = get_frame()
+
+
+    y_ratio = 1
+    for t in range(y_num):
+        #print('執行走Y一次')
+        walk_y_off()
+        for i in range(x_num):
+            walk_x_on()
+            #print('執行走X一次')
+            file_name = str('這是第'+ str(t+1) + '行' + '第' + str(i+1) +'列.png')
+            print(file_name)
+            #file_path = ('C://Users//user//Desktop//newproject//' + file_name + '.jpg')
+            #print(file_path)
+            #save_snapshot(file_name)
+            #cv2.imwrite(file_name, frame)
+            sleep(5)
+        for l in range(x_num):
+            walk_x_off()
+    for t in range(y_num):
+        walk_y_on()
+
+
+
+
+
+#######
+def increment_x():
+    current_x = int(label_x_value["text"])
+    covertx_value = int(label_x_4.get())
+    label_x_value["text"] = str(current_x + (1*covertx_value))
+def decrement_x():
+    current_x = int(label_x_value["text"])
+    covertx_value = int(label_x_4.get())
+    label_x_value["text"] = str(current_x - (1*covertx_value))
+def increment_y():
+    current_y = int(label_y_value["text"])
+    coverty_value = int(label_x_4.get())
+    label_y_value["text"] = str(current_y + (1*coverty_value))
+def decrement_y():
+    current_y = int(label_y_value["text"])
+    coverty_value = int(label_x_4.get())
+    label_y_value["text"] = str(current_y - (1*coverty_value))
+def reset():
+    label_x_value["text"] = "0"
+    label_y_value["text"] = "0"
+def add_entry_value():
+    value = int(test9.get())
+    current_x = int(label_x_value["text"])
+    label_x_value["text"] = str(current_x + value)
+
+
+###合併按鈕函數觸發###
+def combineFunc(*funcs):
+    def combinedFunc(*args, **kwargs):
+        for f in funcs:
+            f(*args, **kwargs)
+    return combinedFunc
+
+
+window = tk.Tk()
+
+job_x = None
+job_y = None
+
+label_x = tk.Label(window, text="X軸:")
+label_x.place(x=20, y=0)
+label_x_value = tk.Label(window, text="0")
+label_x_value.place(x=80, y=0)
+label_y = tk.Label(window, text="Y軸:")
+label_y.place(x=20, y=50)
+label_y_value = tk.Label(window, text="0")
+label_y_value.place(x=80, y=50)
+
+snapshot_button = tk.Button(window, text="Snapshot", command=lambda: save_snapshot(counter))
+snapshot_button.pack()
+test1 = tk.Button(text="X往正方向走", command=combineFunc(increment_x,walk_x_on))
+test1.pack()
+test2 = tk.Button(text="X往負方向走", command=combineFunc(decrement_x,walk_x_off))
+test2.pack()
+test3 = tk.Button(text="Y往正方向走", command=combineFunc(increment_y,walk_y_off))
+test3.pack()
+test4 = tk.Button(text="Y往負方向走", command=combineFunc(decrement_y,walk_y_on))
+test4.pack()
+test5 = tk.Button(text="搜尋邊緣原點", command=combineFunc(walk_orgin,reset))
+test5.pack()
+test6 = tk.Button(text="自動走動點位", command=auto_walk)
+test6.pack()
+#test7 = tk.Button(text="傳送指令給ARDUINO", command=sent_message)
+#test7.pack()
+test8 = tk.Label(window, text="輸入ARDUINO")
+test8.pack()
+test9 = tk.Entry()
+test9.pack()
+
+quit_button = tk.Button(window, text="存檔", command=lambda: save_image(capture))
+quit_button.pack()
+capture = cv2.VideoCapture(Video_path)
+
+label_x_1 = tk.Label(window, text="固定x方向幾成幾:")
+label_x_1.pack()
+label_x_2 = tk.Entry()
+label_x_2.insert(0,3)
+label_x_2.pack()
+
+label_y_1 = tk.Label(window, text="固定y方向幾成幾:")
+label_y_1.pack()
+label_y_2 = tk.Entry()
+label_y_2.insert(0,3)
+label_y_2.pack()
+
+label_x_3 = tk.Label(window, text="X單位換算")
+label_x_3.place(x=20, y=100)
+label_x_4 = tk.Entry()
+label_x_4.insert(0,10)
+label_x_4.place(x=100, y=100,width=80)
+
+label_y_3 = tk.Label(window, text="Y單位換算")
+label_y_3.place(x=20, y=140)
+label_y_4 = tk.Entry()
+label_y_4.insert(0,10)
+label_y_4.place(x=100, y=140,width=80)
+
+# 視頻源label經過ROI處理
+
+
+
+image_label = tk.Label(window)
+image_label.place(x=10, y=350)
+update_image_label(image_label)
+
+image_label1 = tk.Label(window)
+image_label1.place(x=610, y=350)
+show_frame_green()
+
+
+window.title('Plant')
+window.geometry('1200x900')
+window.resizable(False, False)
+
+
+window.mainloop()
+
+
+
+
